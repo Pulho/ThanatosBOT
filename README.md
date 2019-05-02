@@ -1,0 +1,2 @@
+# ThanatosBOT
+Discord Bot

@@ -1,2 +1,3 @@
-youtube_dl
-json
+pafy
+discord.py[voice]
+ffmpeg

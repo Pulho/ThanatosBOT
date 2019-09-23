@@ -1,3 +1,0 @@
-pafy
-discord.py[voice]
-ffmpeg

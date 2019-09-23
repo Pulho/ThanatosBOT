@@ -3,21 +3,21 @@ import asyncio
 import os
 import pafy
 import random
+import ffmpy
 from youtube_dl import YoutubeDL
 from commands import *
 from discord.voice_client import VoiceClient
-from setup import __prefix__, __token__
 from discord.ext import commands
 
-bot = commands.Bot(command_prefix = __prefix__)
+__prefix__ = '!'
+__token__ = 'NDA4NjU2ODk2NDk3NTQ5MzEy.DVTO7w.3SKVdlK6_1OLI8Jx0u7-UHIGpFY'
 
 class MusicPlayer:
 	Is_playing = False
 	song_Paused = False
 	on_Voice_channel = False
-
 	reproductionList = {}
-	audioPlayer = {}
+serverMusicPlayer = {}
 
 @bot.event
 async def on_ready():
@@ -92,33 +92,23 @@ async def leave(context):
 		await context.send(f'I have to be in a voice channel first!')
 	print(f'Voice state = {MusicPlayer.on_Voice_channel}')
 
-@bot.command(pass_context=True)
-async def show(context, Url):
-	video = pafy.new(Url)
-	await context.send(f'Title: {video.title}')
-	await context.send(f'Duration: {video.duration}')
-	await context.send(f'Rating: {video.rating}')
-	await context.send(f'Author: {video.author}')
-	await context.send(f'Length: {video.length}')
-	await context.send(f'Keywords: {video.keywords}')
-	await context.send(f'Video ID: {video.videoid}')
-	await context.send(f'View: {video.viewcount}')
-	await context.send(f'Thumb: {video.thumb}')
 
 @bot.command(pass_context=True)
 async def play(context, url):
-	try:
-		channel = context.message.author.voice.channel
-		await channel.connect()
-	except:
+	if(serverMusicPlayer[context.message.guild.id].on_Voice_channel)
 		print('Already connect to a voice channel')
-		pass
-
-	try:
-		if MusicPlayer.audioPlayer[context.message.guild.id].is_playing() == True:
-			MusicPlayer.reproduction[context.message.guild.id].append(url)
-			return
-	except KeyError:
+	else
+		try
+			channel = context.message.author.voice.channel
+			await channel.connect()
+		except:
+			print('Already connect to a voice channel')
+			pass
+	
+	if serverMusicPlayer[context.message.guild.id].is_playing() == True:
+		serverMusicPlayer[context.message.guild.id].reproductionList.append(url)
+		return
+	else
 		video = pafy.new(url)
 
 		embed = discord.Embed(title=video.title, description=f"Requested by {context.message.author.mention}", color=0x00ff00)

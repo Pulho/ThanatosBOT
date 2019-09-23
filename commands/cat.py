@@ -1,3 +1,4 @@
+import random
 from config.setup  import bot
 
 @bot.command(pass_context=True)

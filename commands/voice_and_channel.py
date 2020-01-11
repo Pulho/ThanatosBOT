@@ -7,8 +7,8 @@ import ffmpy
 import math
 import ffmpeg
 import youtube_dl
+import threading
 from commands import *
-from threading import Thread
 from discord import FFmpegPCMAudio
 from discord.voice_client import VoiceClient
 from discord.ext import commands
@@ -16,43 +16,56 @@ from discord.utils import get
 from config.setup import bot
 
 class Player:
-    def __init__ (self, id):
-	    self.id = id
+    def __init__ (self):
 	    self.voiceChannel = False
 	    self.channelName = None 
 	    self.isPlaying = False
-	    self.ready = False
+	    self.mediaPlayer = None
 
 	    self.queue = []
-	    self.index = 0
+	    self.copyQueue = []
+	    self.actualSongIndex = -1
+	    self.nextSongEvent = asyncio.Event()
 
-Server = {} # Dictionary Vazio  
+	   	# Not implemented yet
+	    self.volume = 1.0
+	    self.repeat = False
+Server = {}
 
 def checkServer(context):
 	if Server.get(context.guild.id) == None:
-		Server[context.guild.id] = Player(context.guild.id)
+		Server[context.guild.id] = Player()
 
 @bot.command() # Done, Exception solved
 async def join(context):
 	checkServer(context)
-	channel = context.message.author.voice.channel
-	voice = get(bot.voice_clients, guild=context.guild)
+	
+	try:
+		channel = context.message.author.voice.channel
+	except AttributeError:
+		channel = None
+		pass
 
+	voice = get(bot.voice_clients, guild=context.guild)
 	if Server[context.guild.id].voiceChannel:
 		if Server[context.guild.id].channelName == context.author.voice.channel:
-			print(f'{context.guild.id}: Already connected to a voice channel')
+			print(f'{context.guild.id} (join): Already connected to a voice channel')
 			await context.send(f'{context.author.mention} Already connected to the voice channel')
 		else:
-			print(f'{context.guild.id}: Moving to channel {context.author.voice.channel}')
+			print(f'{context.guild.id} (join): Moving to channel {context.author.voice.channel}')
 			await context.send(f'Moving to channel {context.author.voice.channel}')
 			Server[context.guild.id].channelName = context.author.voice.channel
 			await context.voice_client.move_to(context.author.voice.channel)			
 	else:
-		print(f'{context.guild.id}: Connected at channel: {context.author.voice.channel}')
-		await context.send(f'Connected to {context.author.voice.channel}')
-		Server[context.guild.id].voiceChannel = True
-		Server[context.guild.id].channelName = context.author.voice.channel
-		await context.author.voice.channel.connect()
+		if channel != None:
+			print(f'{context.guild.id} (join): Connected at channel: {context.author.voice.channel}')
+			await context.send(f'Connected to {context.author.voice.channel}')
+			Server[context.guild.id].voiceChannel = True
+			Server[context.guild.id].channelName = context.author.voice.channel
+			await context.author.voice.channel.connect()
+		else:
+			print(f'{context.guild.id} (join): {context.author} not connected to any voice channel')
+			await context.send(f'{context.author} not connected to any voice channel')		
 
 @bot.command()
 async def leave(context):
@@ -63,99 +76,165 @@ async def leave(context):
 		print(f"{context.guild.id}: Bot was told to leave the voice channel, but was not in one")
 		await context.send("I'm not in a voice channel")
 	else:
-		print(f'{context.guild.id} (leave): Canal {voice_client}')
+		print(f'{context.guild.id} (leave): Leaving channel')
 		del Server[context.guild.id]
 		await voice_client.disconnect()
 
-def incrementIndex(context):
-	print("Chegou Increment")
-	Server[context.guild.id].index = Server[context.guild.id].index + 1
-	return
+@bot.command()
+async def queue(context, actualPage=1):
+	checkServer(context)
 
-def player(context, index):
-	video = Server[context.guild.id].queue[index]
-
-	print(f"{context.guild.id} (CheckQueue): Playing now {video.title}")
-	best_audio = video.getbestaudio()
-	server = context.guild.voice_client
-	server.play(discord.FFmpegPCMAudio(best_audio.url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"), after=lambda e: incrementIndex(context))
-	return
-
-async def online_Player(context, actualIndex):
-	while Server[context.guild.id].index < len(Server[context.guild.id].queue):
-		if actualIndex < Server[context.guild.id].index:
-			print(f"actualIndex {actualIndex}\n\nIndex {Server[context.guild.id].index}")
-			actualIndex = Server[context.guild.id].index
-
-			try:
-				video = Server[context.guild.id].queue[actualIndex]
-			except IndexError:
-				pass
-
-			embed = discord.Embed(title=video.title, description=f"Requested by {context.author.mention}", color=0x6A5ACD)
-			embed.set_thumbnail(url=context.author.avatar_url)
-			embed.set_image(url=video.thumb)
-			embed.add_field(name="Duration", value=video.duration, inline=False)
-			embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
-			await context.send(embed=embed)	
-
-			#Thread(target=player, args=(context,actualIndex)).start()
-			loop = asyncio.get_event_loop()
-			loop.run_in_executor(None, player, context, actualIndex)
-	return
-'''
-async def showSong(context, actualIndex):
-	while Server[context.guild.id].index < len(Server[context.guild.id].queue):
-		if actualIndex < Server[context.guild.id].index:
-			actualIndex = Server[context.guild.id].index
-
-			video = Server[context.guild.id].queue[actualIndex]
-
-			embed = discord.Embed(title=video.title, description=f"Requested by {context.author.mention}", color=0x6A5ACD)
-			embed.set_thumbnail(url=context.author.avatar_url)
-			embed.set_image(url=video.thumb)
-			embed.add_field(name="Duration", value=video.duration, inline=False)
-			embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
-			await context.send(embed=embed)	
-	return
-def check_Queue(context, index):
-	if Server[context.guild.id].index < len(Server[context.guild.id].queue):
-		Server[context.guild.id].index = index
-		video = Server[context.guild.id].queue[index]
-
-		print(f"{context.guild.id} (CheckQueue): Playing now {video.title}")
-		best_audio = video.getbestaudio()
-		server = context.guild.voice_client
-		server.play(discord.FFmpegPCMAudio(best_audio.url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"), after=lambda: check_Queue(context,index+1))
-	else:
+	if not Server[context.guild.id].copyQueue:
+		await context.send("No songs in queue")
 		return
+	size = len(Server[context.guild.id].copyQueue)
+	totalPages = math.ceil(size/10)
+	startIndex = (actualPage-1)*10
 
-async def queue(context, selectPage=1):
-	pages = ceil(Server[context.guild.id].index / 10)
+	if startIndex + 10 >= len(Server[context.guild.id].copyQueue):
+		limit = len(Server[context.guild.id].copyQueue)
+	else:
+		limit = startIndex + 10
 
-	if selectPage > pages:
-		return await context.send("Not available page")
-
-	embed = discord.Embed(title="Queue " + str(selectPage) + "/" + str(pages), color=0x6A5ACD)
-	for index in range((selectPage * 10)-1, 10):
-		embed.add_field(name="Duration", value=video.duration, inline=False)
-		embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
-
+	embed = discord.Embed(title=f"{context.guild.name} Mediaplayer", color=0x6A5ACD)
+	valueString = ""
+	for index in range(startIndex, limit):
+		if index == Server[context.guild.id].actualSongIndex:
+			valueString = valueString + "```css\n" + f"{index}) {Server[context.guild.id].copyQueue[index].title}```\n"
+		else:
+			valueString = valueString + f"```\n{index}) {Server[context.guild.id].copyQueue[index].title}```\n"
+	embed.add_field(name="Queued songs", value=valueString)
+	embed.set_footer(text = f"Page: {actualPage}/{totalPages}", icon_url = context.author.avatar_url)
 	await context.send(embed=embed)	
 
+async def showSong(context,video):
+	embed = discord.Embed(title=video.title, description=f"Requested by {context.author.mention}", color=0x6A5ACD)
+	embed.set_thumbnail(url=context.author.avatar_url)
+	embed.set_image(url=video.thumb)
+	embed.add_field(name="Duration", value=video.duration, inline=False)
+	embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
+	await context.send(embed=embed)	
+
+@bot.command()
+async def stop(context):
+	voice = get(bot.voice_clients, guild=context.guild)
+
+	if voice and voice.is_playing():
+		print(f"{context.guild.id} (stop): Player cleared")
+		Server[context.guild.id].queue.clear()
+		queue[context.guild.id].clear()
+		Server[context.guild.id].actualSongIndex = -1
+		voice.stop()
+		context.message.guild.voice_client.disconnect()
+		await context.send("Music stopped")
+	else:
+		print(f"{context.guild.id} (stop): Not playing")
+		await context.send("No music playing to be stopped")
+
+@bot.command()
+async def pause(context):
+	voice = get(bot.voice_clients, guild=context.guild)
+
+	if voice and voice.is_playing():
+		print(f"{context.guild.id} (pause): Music paused, type !resume to return")
+		voice.pause()
+		await context.send("Music paused, type !resume to return")
+	else:
+		print(f"{context.guild.id} (pause): No music playing to be paused")
+		await context.send("No music playing to be paused")
 '''
+@bot.command()
+async def repeat(context):
+	checkServer(context)
+
+	if not Server[context.guild.id].repeat:
+		await context.send("Repeat activated")
+		Server[context.guild.id].repeat = True
+	else:
+		await context.send("Repeat deactivated")
+		Server[context.guild.id].repeat = False
+
+@bot.command()
+async def volume(context, volumeValue=None):
+	checkServer(context)
+
+	if not volumeValue:
+		await context.send("Please insert a value for volume ( 0.0 to 1.0 )")
+	else:
+		Server[context.guild.id].volume = volumeValue
+'''
+@bot.command()
+async def resume(context):
+	voice = get(bot.voice_clients, guild=context.guild)
+
+	if voice and voice.is_paused():
+		print(f"{context.guild.id} (resume): Resuming song")
+		voice.resume()
+		await context.send(f"Resuming song")
+	else:
+		print(f"{context.guild.id} (resume): Music is not paused or not playing")
+		await context.send("Music is not paused or not playing")
+
+async def serverPlayer(context):
+	if Server[context.guild.id].queue != []:
+		video = Server[context.guild.id].queue.pop(0)
+		Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex + 1
+		embed = discord.Embed(title=video.title, description=f"Requested by {context.author.mention}", color=0x6A5ACD)
+		embed.set_image(url=video.thumb)
+		embed.add_field(name="URL", value=f"https://www.youtube.com/watch?v={video.videoid}", inline=False)
+		embed.add_field(name="Duration", value=video.duration, inline=False)
+		embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
+		await context.send(embed=embed)	
+		best_audio = video.getbestaudio()
+		Server[context.guild.id].mediaPlayer.play(discord.FFmpegPCMAudio(best_audio.url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"), after=lambda e: Server[context.guild.id].nextSongEvent.set())
+		await Server[context.guild.id].nextSongEvent.wait()
+		Server[context.guild.id].nextSongEvent.clear()
+		await serverPlayer(context)
+
 @bot.command()
 async def play(context, url=None):
 	checkServer(context)
 
-	video = pafy.new(url)
-	voice_client: discord.VoiceClient = discord.utils.get(bot.voice_clients, guild=context.guild)
-	Server[context.guild.id].queue.append(video)
+	## Join function
+	try:
+		channel = context.message.author.voice.channel
+	except AttributeError:
+		channel = None
+		pass
 
-	if not voice_client.is_playing():
-		songTask = asyncio.create_task(online_Player(context, -1))
-		await songTask
+	if not url:
+		await context.send("Please type the url link or the name of it")
+		return
+
+	voice = get(bot.voice_clients, guild=context.guild)
+
+	if channel != None:
+		if Server[context.guild.id].voiceChannel:
+			if Server[context.guild.id].channelName != context.author.voice.channel:
+				print(f'{context.guild.id}: Moving to channel {context.author.voice.channel}')
+				Server[context.guild.id].channelName = context.author.voice.channel
+				await context.voice_client.move_to(context.author.voice.channel)			
+		else:
+			print(f'{context.guild.id}: Connected at channel: {context.author.voice.channel}')
+			await context.send(f'**Connected to {context.author.voice.channel}**')
+			Server[context.guild.id].voiceChannel = True
+			Server[context.guild.id].channelName = context.author.voice.channel
+			await context.author.voice.channel.connect()
+		## End of join function
+
+		video = pafy.new(url)
+		voice_client: discord.VoiceClient = discord.utils.get(bot.voice_clients, guild=context.guild)
+		Server[context.guild.id].queue.append(video)
+		Server[context.guild.id].copyQueue.append(video)
+
+		await context.message.delete()
+		if not voice_client.is_playing():
+			Server[context.guild.id].mediaPlayer = context.guild.voice_client	
+			await serverPlayer(context)
+		else:
+			print(f"{context.guild.id} (play): {video.title} Queued, position {len(Server[context.guild.id].queue)}")
+			await context.send(f"**{video.title} Queued, position {len(Server[context.guild.id].copyQueue)}**")
+		return
 	else:
-		print(f"{video.title} Queued, position {len(Server[context.guild.id].queue)}")
-		await context.send(f"{context.guild.id}: {video.title} Queued, position {len(Server[context.guild.id].queue)}")
-	return
+		print(f'{context.guild.id} (play): {context.author} not connected to any voice channel')
+		await context.send(f'{context.author} not connected to any voice channel')	

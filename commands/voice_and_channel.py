@@ -7,7 +7,11 @@ import ffmpy
 import math
 import ffmpeg
 import youtube_dl
-import threading
+#Pesquisar musica do youtube
+import urllib.request
+import urllib.parse
+import re
+
 from commands import *
 from discord import FFmpegPCMAudio
 from discord.voice_client import VoiceClient
@@ -191,9 +195,33 @@ async def serverPlayer(context):
 		Server[context.guild.id].nextSongEvent.clear()
 		await serverPlayer(context)
 
+def youtubePlaylistTreatment(url, context):
+	ytbPlaylist = pafy.get_playlist(url)
+	videosUrl = []
+
+	for index in range(len(ytbPlaylist['items'])):
+		video = pafy.new(f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}")
+		Server[context.guild.id].queue.append(video)
+		Server[context.guild.id].copyQueue.append(video)
+
+	return
+
+def demultiplexUrlType(url):
+	if url.find('youtube.com/watch?v=') != -1:
+		if url.find('&list=') != -1:
+			return 0
+		return 1
+	else:
+		return 2
+
 @bot.command()
-async def play(context, url=None):
+async def play(context, *inputReceive):
 	checkServer(context)
+
+	if not inputReceive:
+		await context.send("Please type the url link or the name of it")
+		return
+	url = " ".join(inputReceive)
 
 	## Join function
 	try:
@@ -201,10 +229,6 @@ async def play(context, url=None):
 	except AttributeError:
 		channel = None
 		pass
-
-	if not url:
-		await context.send("Please type the url link or the name of it")
-		return
 
 	voice = get(bot.voice_clients, guild=context.guild)
 
@@ -222,10 +246,22 @@ async def play(context, url=None):
 			await context.author.voice.channel.connect()
 		## End of join function
 
-		video = pafy.new(url)
+		typeUrl = demultiplexUrlType(url)
+		if typeUrl == 0:
+			videos = youtubePlaylistTreatment(url, context)
+		elif typeUrl == 1:
+			video = pafy.new(url)
+			Server[context.guild.id].queue.append(video)
+			Server[context.guild.id].copyQueue.append(video)
+		elif typeUrl == 2:
+			query_string = urllib.parse.urlencode({"search_query" : url})
+			html_content = urllib.request.urlopen("http://www.youtube.com/results?" + query_string)
+			search_results = re.findall(r'href=\"\/watch\?v=(.{11})', html_content.read().decode())
+			video = pafy.new("http://www.youtube.com/watch?v=" + search_results[0])
+			Server[context.guild.id].queue.append(video)
+			Server[context.guild.id].copyQueue.append(video)
+
 		voice_client: discord.VoiceClient = discord.utils.get(bot.voice_clients, guild=context.guild)
-		Server[context.guild.id].queue.append(video)
-		Server[context.guild.id].copyQueue.append(video)
 
 		await context.message.delete()
 		if not voice_client.is_playing():

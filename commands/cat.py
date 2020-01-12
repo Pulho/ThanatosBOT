@@ -1,4 +1,5 @@
 import random
+import discord
 from config.setup  import bot
 
 @bot.command(pass_context=True)
@@ -64,4 +65,7 @@ async def cat(context):
 		'https://giphy.com/gifs/cat-maru-loop-Mhy9hKgfwI0lG'
 	]
 
-	await context.send(random.choice(catList))
+	embed = discord.Embed(title=context.guild.name, description="Look at this cute cat", color=0x6A5ACD)
+	embed.set_image(url=random.choice(catList))
+	await context.send(embed=embed)	
+

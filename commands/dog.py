@@ -1,4 +1,5 @@
 import random
+import discord
 from config.setup  import bot
 
 @bot.command(pass_context=True)
@@ -63,4 +64,6 @@ async def dog(context):
 		'https://giphy.com/gifs/dog-puppy-pArhCgHcVcyRO'
 	]
 
-	await context.send(random.choice(dogList))
+	embed = discord.Embed(title=context.guild.name, description="Look at this cute dog", color=0x6A5ACD)
+	embed.set_image(url=random.choice(dogList))
+	await context.send(embed=embed)	

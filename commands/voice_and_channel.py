@@ -104,42 +104,39 @@ async def queue(context, actualPage=1):
 	valueString = ""
 	for index in range(startIndex, limit):
 		if index == Server[context.guild.id].actualSongIndex:
-			valueString = valueString + "```css\n" + f"{index}) {Server[context.guild.id].copyQueue[index].title}```\n"
+			valueString = valueString + "```css\n" + f"{index + 1}) {Server[context.guild.id].copyQueue[index].title}```\n"
 		else:
-			valueString = valueString + f"```\n{index}) {Server[context.guild.id].copyQueue[index].title}```\n"
+			valueString = valueString + f"```\n{index + 1}) {Server[context.guild.id].copyQueue[index].title}```\n"
 	embed.add_field(name="Queued songs", value=valueString)
 	embed.set_footer(text = f"Page: {actualPage}/{totalPages}", icon_url = context.author.avatar_url)
 	await context.send(embed=embed)	
 
-async def showSong(context,video):
-	embed = discord.Embed(title=video.title, description=f"Requested by {context.author.mention}", color=0x6A5ACD)
-	embed.set_thumbnail(url=context.author.avatar_url)
-	embed.set_image(url=video.thumb)
-	embed.add_field(name="Duration", value=video.duration, inline=False)
-	embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
-	await context.send(embed=embed)	
-
 @bot.command()
 async def stop(context):
-	voice = get(bot.voice_clients, guild=context.guild)
+	checkServer(context)
 
-	if voice and voice.is_playing():
+	voice_client = context.message.guild.voice_client
+	if Server[context.guild.id].mediaPlayer.is_playing():
 		print(f"{context.guild.id} (stop): Player cleared")
+		queue = Server[context.guild.id].copyQueue.copy()
+
 		Server[context.guild.id].queue.clear()
-		queue[context.guild.id].clear()
 		Server[context.guild.id].actualSongIndex = -1
 		voice.stop()
-		context.message.guild.voice_client.disconnect()
-		await context.send("Music stopped")
+		voice_client.disconnect()
+		del Server[context.guild.id]
+		checkServer(context.guild.id)
+		Server[context.guild.id].queue = queue.copy()
+		Server[context.guild.id].copyQueue = queue.copy()
 	else:
 		print(f"{context.guild.id} (stop): Not playing")
 		await context.send("No music playing to be stopped")
 
 @bot.command()
 async def pause(context):
-	voice = get(bot.voice_clients, guild=context.guild)
+	checkServer(context)
 
-	if voice and voice.is_playing():
+	if Server[context.guild.id].mediaPlayer.is_playing():
 		print(f"{context.guild.id} (pause): Music paused, type !resume to return")
 		voice.pause()
 		await context.send("Music paused, type !resume to return")
@@ -169,15 +166,58 @@ async def volume(context, volumeValue=None):
 '''
 @bot.command()
 async def resume(context):
-	voice = get(bot.voice_clients, guild=context.guild)
+	checkServer(context)
 
-	if voice and voice.is_paused():
+	if Server[context.guild.id].mediaPlayer.is_paused():
 		print(f"{context.guild.id} (resume): Resuming song")
-		voice.resume()
+		Server[context.guild.id].mediaPlayer.resume()
 		await context.send(f"Resuming song")
 	else:
 		print(f"{context.guild.id} (resume): Music is not paused or not playing")
 		await context.send("Music is not paused or not playing")
+
+@bot.command()
+async def skip(context):
+	checkServer(context)
+
+	if Server[context.guild.id].mediaPlayer.is_playing():
+		if Server[context.guild.id].actualSongIndex < len(Server[context.guild.id].copyQueue):
+			await context.send("Skipping")
+			Server[context.guild.id].mediaPlayer.stop()
+		else:
+			await context.send("No possible to skip")
+	return
+
+@bot.command()
+async def previous(context):
+	checkServer(context)
+
+	if Server[context.guild.id].mediaPlayer.is_playing():
+		if Server[context.guild.id].actualSongIndex - 1 >= 0:
+			index = Server[context.guild.id].actualSongIndex
+			actualSong = Server[context.guild.id].copyQueue[index]
+			prevSong   = Server[context.guild.id].copyQueue[index - 1]
+			Server[context.guild.id].queue.insert(0, actualSong)
+			Server[context.guild.id].queue.insert(0, prevSong)
+			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 2
+			await context.send("Retrieving previous song")
+			Server[context.guild.id].mediaPlayer.stop()
+		else:
+			await context.send("No possible to get the previous song")
+	return
+
+@bot.command()
+async def repeat(context):
+	checkServer(context)
+
+	if Server[context.guild.id].mediaPlayer.is_playing():
+		print("Entrou")
+		if Server[context.guild.id].actualSongIndex < len(Server[context.guild.id].copyQueue):
+			await context.send("Skipping")
+			Server[context.guild.id].mediaPlayer.stop()
+		else:
+			await context.send("No possible to skip")
+	return
 
 async def serverPlayer(context):
 	if Server[context.guild.id].queue != []:
@@ -191,7 +231,9 @@ async def serverPlayer(context):
 		await context.send(embed=embed)	
 		best_audio = video.getbestaudio()
 		Server[context.guild.id].mediaPlayer.play(discord.FFmpegPCMAudio(best_audio.url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"), after=lambda e: Server[context.guild.id].nextSongEvent.set())
+		print("serverPlayer waiting lock")
 		await Server[context.guild.id].nextSongEvent.wait()
+		print("serverPlayer lock acquired")
 		Server[context.guild.id].nextSongEvent.clear()
 		await serverPlayer(context)
 
@@ -203,14 +245,14 @@ def youtubePlaylistTreatment(url, context):
 		video = pafy.new(f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}")
 		Server[context.guild.id].queue.append(video)
 		Server[context.guild.id].copyQueue.append(video)
-
 	return
 
 def demultiplexUrlType(url):
-	if url.find('youtube.com/watch?v=') != -1:
-		if url.find('&list=') != -1:
+	if url.find('youtube.com/') != -1:
+		if url.find('watch?v=') != -1:
 			return 0
-		return 1
+		elif url.find('playlist?list='):
+			return 1
 	else:
 		return 2
 
@@ -248,12 +290,14 @@ async def play(context, *inputReceive):
 
 		typeUrl = demultiplexUrlType(url)
 		if typeUrl == 0:
-			videos = youtubePlaylistTreatment(url, context)
-		elif typeUrl == 1:
 			video = pafy.new(url)
 			Server[context.guild.id].queue.append(video)
 			Server[context.guild.id].copyQueue.append(video)
+		elif typeUrl == 1: # Broken
+			await context.send("This may take a while. . .")
+			videos = youtubePlaylistTreatment(url, context)
 		elif typeUrl == 2:
+			await context.send(f"Searching for the best result for {url}. . .")
 			query_string = urllib.parse.urlencode({"search_query" : url})
 			html_content = urllib.request.urlopen("http://www.youtube.com/results?" + query_string)
 			search_results = re.findall(r'href=\"\/watch\?v=(.{11})', html_content.read().decode())

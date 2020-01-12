@@ -1,6 +1,7 @@
+import discord
 from config.setup  import bot
 
-@bot.command(pass_context=True) # Done / Update
+@bot.command() # Done / Update
 async def Help(context, command=None):
 	if command != None:
 		if command == 'dev':

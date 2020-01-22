@@ -6,7 +6,7 @@ import random
 import ffmpy
 import math
 import ffmpeg
-import youtube_dl
+#import youtube_dl
 #Pesquisar musica do youtube
 import urllib.request
 import urllib.parse
@@ -112,6 +112,38 @@ async def queue(context, actualPage=1):
 	await context.send(embed=embed)	
 
 @bot.command()
+async def delete(context, index=None):
+	checkServer(context)
+
+	if not Server[context.guild.id].copyQueue:
+		await context.send("Empty queue")
+		return
+
+	if index != None and index.isdigit():
+		index = int(index) - 1
+		if (index == None) or (index < 0 or index > len(Server[context.guild.id].copyQueue)):
+			await context.send("Not a valid index")
+			return
+
+		if index == Server[context.guild.id].actualSongIndex:
+			await context.send("Cannot delete the actual playing song")
+			return
+
+		if index < Server[context.guild.id].actualSongIndex:
+			songRemoved = Server[context.guild.id].copyQueue.pop(index)
+			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 1
+			await context.send(f"{songRemoved.title} removed from the queue")
+		else:
+			songRemoved = Server[context.guild.id].copyQueue.pop(index)
+			print(f"Server Queue {Server[context.guild.id].queue}")
+			print(f"Server actualSongIndex {Server[context.guild.id].actualSongIndex}")
+			Server[context.guild.id].queue.pop((index - Server[context.guild.id].actualSongIndex - 1))
+			await context.send(f"{songRemoved.title} removed from the queue")
+	else:
+		await context.send("Not a valid argument")
+	return
+
+@bot.command()
 async def stop(context):
 	checkServer(context)
 
@@ -122,7 +154,7 @@ async def stop(context):
 
 		Server[context.guild.id].queue.clear()
 		Server[context.guild.id].actualSongIndex = -1
-		voice.stop()
+		Server[context.guild.id].mediaPlayer.stop()
 		voice_client.disconnect()
 		del Server[context.guild.id]
 		checkServer(context.guild.id)
@@ -138,7 +170,7 @@ async def pause(context):
 
 	if Server[context.guild.id].mediaPlayer.is_playing():
 		print(f"{context.guild.id} (pause): Music paused, type !resume to return")
-		voice.pause()
+		Server[context.guild.id].mediaPlayer.pause()
 		await context.send("Music paused, type !resume to return")
 	else:
 		print(f"{context.guild.id} (pause): No music playing to be paused")
@@ -177,15 +209,28 @@ async def resume(context):
 		await context.send("Music is not paused or not playing")
 
 @bot.command()
-async def skip(context):
+async def skip(context, *inputReceive):
 	checkServer(context)
 
-	if Server[context.guild.id].mediaPlayer.is_playing():
-		if Server[context.guild.id].actualSongIndex < len(Server[context.guild.id].copyQueue):
-			await context.send("Skipping")
-			Server[context.guild.id].mediaPlayer.stop()
-		else:
-			await context.send("No possible to skip")
+	if not inputReceive:
+		if Server[context.guild.id].mediaPlayer.is_playing():
+			if Server[context.guild.id].actualSongIndex + 1 < len(Server[context.guild.id].copyQueue):
+				await context.send("Skipping")
+				Server[context.guild.id].mediaPlayer.stop()
+			else:
+				await context.send("There's no next song yet")
+	elif inputReceive[0] == "to":
+		index = int(inputReceive[1]) - 1
+
+		if Server[context.guild.id].mediaPlayer.is_playing():
+			if Server[context.guild.id].actualSongIndex + index < len(Server[context.guild.id].copyQueue):
+	
+				Server[context.guild.id].queue = Server[context.guild.id].copyQueue[index:].copy()
+				Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex + index - 1
+				await context.send("Skipping")
+				Server[context.guild.id].mediaPlayer.stop()
+			else:
+				await context.send("Not possible to skip that much")
 	return
 
 @bot.command()

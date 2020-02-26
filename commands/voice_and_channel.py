@@ -6,7 +6,6 @@ import random
 import ffmpy
 import math
 import ffmpeg
-#import youtube_dl
 #Pesquisar musica do youtube
 import urllib.request
 import urllib.parse

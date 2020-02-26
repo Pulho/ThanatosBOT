@@ -6,7 +6,6 @@ import random
 import ffmpy
 import math
 import ffmpeg
-import youtube_dl
 #Pesquisar musica do youtube
 import urllib.request
 import urllib.parse
@@ -25,7 +24,6 @@ class Player:
 	    self.channelName = None 
 	    self.isPlaying = False
 	    self.mediaPlayer = None
-
 	    self.queue = []
 	    self.copyQueue = []
 	    self.actualSongIndex = -1
@@ -112,22 +110,50 @@ async def queue(context, actualPage=1):
 	await context.send(embed=embed)	
 
 @bot.command()
+async def delete(context, index=None):
+	checkServer(context)
+
+	if not Server[context.guild.id].copyQueue:
+		await context.send("Empty queue")
+		return
+
+	if index != None and index.isdigit():
+		index = int(index) - 1
+		if (index == None) or (index < 0 or index > len(Server[context.guild.id].copyQueue)):
+			await context.send("Not a valid index")
+			return
+
+		if index == Server[context.guild.id].actualSongIndex:
+			await context.send("Cannot delete the actual playing song")
+			return
+
+		if index < Server[context.guild.id].actualSongIndex:
+			songRemoved = Server[context.guild.id].copyQueue.pop(index)
+			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 1
+			await context.send(f"{songRemoved.title} removed from the queue")
+		else:
+			songRemoved = Server[context.guild.id].copyQueue.pop(index)
+			print(f"Server Queue {Server[context.guild.id].queue}")
+			print(f"Server actualSongIndex {Server[context.guild.id].actualSongIndex}")
+			Server[context.guild.id].queue.pop((index - Server[context.guild.id].actualSongIndex - 1))
+			await context.send(f"{songRemoved.title} removed from the queue")
+	else:
+		await context.send("Not a valid argument")
+	return
+
+@bot.command()
 async def stop(context):
 	checkServer(context)
 
 	voice_client = context.message.guild.voice_client
 	if Server[context.guild.id].mediaPlayer.is_playing():
 		print(f"{context.guild.id} (stop): Player cleared")
-		queue = Server[context.guild.id].copyQueue.copy()
-
+		Server[context.guild.id].mediaPlayer.stop()
 		Server[context.guild.id].queue.clear()
 		Server[context.guild.id].actualSongIndex = -1
-		voice.stop()
-		voice_client.disconnect()
-		del Server[context.guild.id]
-		checkServer(context.guild.id)
-		Server[context.guild.id].queue = queue.copy()
-		Server[context.guild.id].copyQueue = queue.copy()
+		await voice_client.disconnect()
+		Server[context.guild.id].isPlaying = False
+		Server[context.guild.id].queue = Server[context.guild.id].copyQueue.copy()
 	else:
 		print(f"{context.guild.id} (stop): Not playing")
 		await context.send("No music playing to be stopped")
@@ -138,7 +164,7 @@ async def pause(context):
 
 	if Server[context.guild.id].mediaPlayer.is_playing():
 		print(f"{context.guild.id} (pause): Music paused, type !resume to return")
-		voice.pause()
+		Server[context.guild.id].mediaPlayer.pause()
 		await context.send("Music paused, type !resume to return")
 	else:
 		print(f"{context.guild.id} (pause): No music playing to be paused")
@@ -177,15 +203,29 @@ async def resume(context):
 		await context.send("Music is not paused or not playing")
 
 @bot.command()
-async def skip(context):
+async def skip(context, *inputReceive):
 	checkServer(context)
 
-	if Server[context.guild.id].mediaPlayer.is_playing():
-		if Server[context.guild.id].actualSongIndex < len(Server[context.guild.id].copyQueue):
-			await context.send("Skipping")
-			Server[context.guild.id].mediaPlayer.stop()
-		else:
-			await context.send("No possible to skip")
+	if not inputReceive:
+		if Server[context.guild.id].mediaPlayer.is_playing():
+			if Server[context.guild.id].actualSongIndex + 1 < len(Server[context.guild.id].copyQueue):
+				print(f"{context.guild.id} (skip): Skipping song")
+				await context.send("Skipping")
+				Server[context.guild.id].mediaPlayer.stop()
+			else:
+				await context.send("There's no next song yet")
+	elif inputReceive[0] == "to":
+		index = int(inputReceive[1]) - 1
+
+		if Server[context.guild.id].mediaPlayer.is_playing():
+			if index < len(Server[context.guild.id].copyQueue) and index > 0:
+				print(f"{context.guild.id} (skip to {index}): Skipping song")
+				Server[context.guild.id].queue = Server[context.guild.id].copyQueue[index:].copy()
+				Server[context.guild.id].actualSongIndex = index
+				await context.send(f"Skipping to {index + 1}")
+				Server[context.guild.id].mediaPlayer.stop()
+			else:
+				await context.send("Not possible to skip to that index")
 	return
 
 @bot.command()
@@ -257,11 +297,74 @@ def demultiplexUrlType(url):
 		return 2
 
 @bot.command()
+async def mystuff(context, *actualPage):
+	# retrieveInfoBD = BD()
+	#retrieveInfoBD = [True, 2, "Summer eletrohits", "Brega funk", 54] # premium status/quantidade de playlists criadas/nome das playlists/Duração total
+	retrieveInfoBD = [False, 0, None, 0]
+
+	userPremium = retrieveInfoBD[0]
+	quantityPlaylist = int(retrieveInfoBD[1])
+	playlistName = []
+	totalDuration = int(retrieveInfoBD.pop())
+
+	title =f"**{context.author.name}'s Profile**\n"
+	if not userPremium:
+		prefix = "-"
+	else:
+		prefix = "+"
+
+	information = f"**User Information**\n```diff\n{prefix} Premium status: {userPremium}\n+ Playlists number: {quantityPlaylist}\n+ Total duration: {totalDuration/60}min```\n"
+
+	if userPremium == False:
+		prefix = "-"
+		thplaylistPrefix = "+"
+		if quantityPlaylist == 2:
+			thplaylistPrefix = "-"
+	elif userPremium:
+		prefix = "+"
+		thplaylistPrefix = "+"
+
+	commands = f"**Commands**\n```diff\n{thplaylistPrefix} thplaylist <name>\n+ myshuffle <playlist name>\n+ myqueue <playlist name>\n{prefix} mycopy <User mention> <Playlist name>\n+ mydelete <index>\n+ myclear <playlist name>\n+ myrename <playlist oldname> <playlist newname>\n{prefix} myimportSpotify <URL Spotify playlist>```\n"
+
+	playlists = f"**Playlists**\n```md\n"
+	if quantityPlaylist > 0: 
+		for index in range(quantityPlaylist):
+			playlistName.append(retrieveInfoBD[2 + index])
+
+		print(playlistName)
+
+		if not actualPage:
+			actualPage = 1
+		else:
+			actualPage = int(actualPage[0])
+
+		size = len(playlistName)
+		totalPages = math.ceil(size/5)
+		startIndex = (actualPage-1)*5
+
+		if startIndex + 5 >= len(playlistName):
+			limit = len(playlistName)
+		else:
+			limit = startIndex + 5
+		for index in range(startIndex, limit):
+			playlists = playlists + f"# {index + 1}) {playlistName[index]}\n"
+
+		playlists = playlists + "\n\nPage " + str(actualPage) + "/" + str(totalPages) + "```"
+	else:
+		playlists = playlists + "# 0) <Empty>\n\nIt seems that you don't have any playlist yet\ndon't worry, create one right now with\n!thplaylist <name>\nPage 1/1\n\n```"
+
+	userProfile = title + information + commands + playlists
+	await context.send(userProfile)
+
+@bot.command()
 async def play(context, *inputReceive):
 	checkServer(context)
 
-	if not inputReceive:
-		await context.send("Please type the url link or the name of it")
+	if not inputReceive and Server[context.guild.id].queue == []:
+		if not Server[context.guild.id].queue:
+			await context.send("Please type the url link or the name of it")
+		else:
+			await serverPlayer(context)
 		return
 	url = " ".join(inputReceive)
 
@@ -314,7 +417,7 @@ async def play(context, *inputReceive):
 		else:
 			print(f"{context.guild.id} (play): {video.title} Queued, position {len(Server[context.guild.id].queue)}")
 			await context.send(f"**{video.title} Queued, position {len(Server[context.guild.id].copyQueue)}**")
-		return
 	else:
 		print(f'{context.guild.id} (play): {context.author} not connected to any voice channel')
 		await context.send(f'{context.author} not connected to any voice channel')	
+	return

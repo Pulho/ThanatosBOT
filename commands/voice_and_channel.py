@@ -3,12 +3,11 @@ import asyncio
 import os
 import pafy
 import random
-import ffmpy
 import math
 import ffmpeg
-#Pesquisar musica do youtube
-import urllib.request
+#Pesquisar musica do youtube import urllib.request
 import urllib.parse
+import urllib.request
 import re
 
 from commands import *
@@ -21,13 +20,14 @@ from config.setup import bot
 class Player:
     def __init__ (self):
 	    self.voiceChannel = False
-	    self.channelName = None 
-	    self.isPlaying = False
+	    self.channelName = None
 	    self.mediaPlayer = None
+	    self.requestBy = []
 	    self.queue = []
 	    self.copyQueue = []
-	    self.actualSongIndex = -1
+	    self.actualSongIndex = 0
 	    self.nextSongEvent = asyncio.Event()
+	    self.gotoFlag = False
 
 	   	# Not implemented yet
 	    self.volume = 1.0
@@ -79,8 +79,8 @@ async def leave(context):
 		await context.send("I'm not in a voice channel")
 	else:
 		print(f'{context.guild.id} (leave): Leaving channel')
-		del Server[context.guild.id]
 		await voice_client.disconnect()
+		del Server[context.guild.id]
 
 @bot.command()
 async def queue(context, actualPage=1):
@@ -89,6 +89,7 @@ async def queue(context, actualPage=1):
 	if not Server[context.guild.id].copyQueue:
 		await context.send("No songs in queue")
 		return
+
 	size = len(Server[context.guild.id].copyQueue)
 	totalPages = math.ceil(size/10)
 	startIndex = (actualPage-1)*10
@@ -113,32 +114,38 @@ async def queue(context, actualPage=1):
 async def delete(context, index=None):
 	checkServer(context)
 
-	if not Server[context.guild.id].copyQueue:
-		await context.send("Empty queue")
+	if not Server[context.guild.id].copyQueue or index == None:
+		await context.send("Empty queue or empty value for index")
+		print(f"{context.guild.id} (delete): Empty queue or empty value for index")
 		return
 
-	if index != None and index.isdigit():
-		index = int(index) - 1
-		if (index == None) or (index < 0 or index > len(Server[context.guild.id].copyQueue)):
-			await context.send("Not a valid index")
-			return
+	if not index.isdigit():
+		await context.send("Not a valid format for index")
+		print(f"{context.guild.id} (delete): Not a valid format for index")
+		return
 
-		if index == Server[context.guild.id].actualSongIndex:
-			await context.send("Cannot delete the actual playing song")
-			return
+	index = int(index) - 1
 
-		if index < Server[context.guild.id].actualSongIndex:
-			songRemoved = Server[context.guild.id].copyQueue.pop(index)
-			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 1
-			await context.send(f"{songRemoved.title} removed from the queue")
-		else:
-			songRemoved = Server[context.guild.id].copyQueue.pop(index)
-			print(f"Server Queue {Server[context.guild.id].queue}")
-			print(f"Server actualSongIndex {Server[context.guild.id].actualSongIndex}")
-			Server[context.guild.id].queue.pop((index - Server[context.guild.id].actualSongIndex - 1))
-			await context.send(f"{songRemoved.title} removed from the queue")
+	if index < 0 or index > len(Server[context.guild.id].copyQueue):
+		await context.send("Not a valid value for index")
+		print(f"{context.guild.id} (delete): Not a valid value for index")
+		return
+
+	if index == Server[context.guild.id].actualSongIndex:
+		await context.send("Cannot delete the actual playing song")
+		print(f"{context.guild.id} (delete): Cannot delete the actual playing song")
+		return
+
+	if index < Server[context.guild.id].actualSongIndex:
+		songRemoved = Server[context.guild.id].copyQueue.pop(index)
+		Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 1
+		await context.send(f"{songRemoved.title} removed from the queue")
+		print(f"{context.guild.id} (delete): {songRemoved.title} removed from the queue")
 	else:
-		await context.send("Not a valid argument")
+		songRemoved = Server[context.guild.id].copyQueue.pop(index)
+		Server[context.guild.id].queue.pop((index - Server[context.guild.id].actualSongIndex - 1))
+		await context.send(f"{songRemoved.title} removed from the queue")
+		print(f"{context.guild.id} (delete): {songRemoved.title} removed from the queue")
 	return
 
 @bot.command()
@@ -147,13 +154,13 @@ async def stop(context):
 
 	voice_client = context.message.guild.voice_client
 	if Server[context.guild.id].mediaPlayer.is_playing():
-		print(f"{context.guild.id} (stop): Player cleared")
-		Server[context.guild.id].mediaPlayer.stop()
 		Server[context.guild.id].queue.clear()
-		Server[context.guild.id].actualSongIndex = -1
+		Server[context.guild.id].requestBy.clear()
+		Server[context.guild.id].copyQueue.clear()
+		Server[context.guild.id].voiceChannel = False
 		await voice_client.disconnect()
-		Server[context.guild.id].isPlaying = False
-		Server[context.guild.id].queue = Server[context.guild.id].copyQueue.copy()
+		print(f"{context.guild.id} (stop): Player cleared")
+		Server[context.guild.id].actualSongIndex = 0
 	else:
 		print(f"{context.guild.id} (stop): Not playing")
 		await context.send("No music playing to be stopped")
@@ -207,84 +214,107 @@ async def skip(context, *inputReceive):
 	checkServer(context)
 
 	if not inputReceive:
-		if Server[context.guild.id].mediaPlayer.is_playing():
+		if Server[context.guild.id].voiceChannel and Server[context.guild.id].mediaPlayer.is_playing():
 			if Server[context.guild.id].actualSongIndex + 1 < len(Server[context.guild.id].copyQueue):
 				print(f"{context.guild.id} (skip): Skipping song")
 				await context.send("Skipping")
 				Server[context.guild.id].mediaPlayer.stop()
 			else:
+				print(f"{context.guild.id} (skip): Skipping song")
 				await context.send("There's no next song yet")
+		else:
+			print(f"{context.guild.id} (skip): Skipping song")
+			await context.send("Not possible to skip now")
+
 	elif inputReceive[0] == "to":
-		index = int(inputReceive[1]) - 1
+		if not inputReceive[1].isdigit():
+			await context.send("Not valid index")
+			return
+		index = int(inputReceive[1])
 
-		if Server[context.guild.id].mediaPlayer.is_playing():
-			if index < len(Server[context.guild.id].copyQueue) and index > 0:
-				print(f"{context.guild.id} (skip to {index}): Skipping song")
-				Server[context.guild.id].queue = Server[context.guild.id].copyQueue[index:].copy()
-				Server[context.guild.id].actualSongIndex = index
-				await context.send(f"Skipping to {index + 1}")
-				Server[context.guild.id].mediaPlayer.stop()
+		if Server[context.guild.id].voiceChannel:
+			if ((index - 1) < len(Server[context.guild.id].copyQueue)) and (index - 1) >= 0:
+				if (index - 1) == Server[context.guild.id].actualSongIndex:
+					print(f"{context.guild.id} (skip to): Not possible to skip to actual song")
+					await context.send("Not possible to skip to actual song")
+					return
+				else:
+					print(f"{context.guild.id} (skip to): Skipping song")
+					Server[context.guild.id].gotoFlag = True
+					Server[context.guild.id].queue = Server[context.guild.id].copyQueue[index-1:].copy()
+					Server[context.guild.id].actualSongIndex = index - 1
+					await context.send(f"Skipping to {index}")
+					Server[context.guild.id].mediaPlayer.stop()
 			else:
+				print(f"{context.guild.id} (skip to): Not possible to skip to that index")
 				await context.send("Not possible to skip to that index")
+		else:
+			print(f"{context.guild.id} (skip to): Not possible to skip now")
+			await context.send("Not possible to skip now")
+	else:
+		print(f"{context.guild.id} (skip to): Parameter not recognized")
+		await context.send("Parameter not recognized")		
 	return
 
 @bot.command()
-async def previous(context):
+async def prev(context):
 	checkServer(context)
 
-	if Server[context.guild.id].mediaPlayer.is_playing():
+	if  Server[context.guild.id].voiceChannel and Server[context.guild.id].mediaPlayer.is_playing():
 		if Server[context.guild.id].actualSongIndex - 1 >= 0:
-			index = Server[context.guild.id].actualSongIndex
-			actualSong = Server[context.guild.id].copyQueue[index]
-			prevSong   = Server[context.guild.id].copyQueue[index - 1]
-			Server[context.guild.id].queue.insert(0, actualSong)
-			Server[context.guild.id].queue.insert(0, prevSong)
-			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 2
+			actualIndex = Server[context.guild.id].actualSongIndex
+			Server[context.guild.id].queue = Server[context.guild.id].copyQueue[actualIndex-1:].copy()
+			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex - 1
+			Server[context.guild.id].gotoFlag = True
 			await context.send("Retrieving previous song")
+			print(f"{Server[context.guild.id]} (prev): Retrieving previous song")
 			Server[context.guild.id].mediaPlayer.stop()
 		else:
-			await context.send("No possible to get the previous song")
-	return
-
-@bot.command()
-async def repeat(context):
-	checkServer(context)
-
-	if Server[context.guild.id].mediaPlayer.is_playing():
-		print("Entrou")
-		if Server[context.guild.id].actualSongIndex < len(Server[context.guild.id].copyQueue):
-			await context.send("Skipping")
-			Server[context.guild.id].mediaPlayer.stop()
-		else:
-			await context.send("No possible to skip")
+			print(f"{Server[context.guild.id]} (prev): Not possible to get the previous song")
+			await context.send("Not possible to get the previous song")
+	else:
+		print(f"{Server[context.guild.id]} (prev): Not possible to get the previous song")
+		await context.send("Not possible to get the previous song")
 	return
 
 async def serverPlayer(context):
 	if Server[context.guild.id].queue != []:
 		video = Server[context.guild.id].queue.pop(0)
-		Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex + 1
-		embed = discord.Embed(title=video.title, description=f"Requested by {context.author.mention}", color=0x6A5ACD)
+		requestAuthor = Server[context.guild.id].requestBy.pop(0)
+		embed = discord.Embed(title=video.title, description=f"Requested by {requestAuthor}", color=0x6A5ACD)
 		embed.set_image(url=video.thumb)
 		embed.add_field(name="URL", value=f"https://www.youtube.com/watch?v={video.videoid}", inline=False)
 		embed.add_field(name="Duration", value=video.duration, inline=False)
-		embed.add_field(name="Try our premium freature to create playlists", value="Thanatos, killing your boredom", inline=False)
+		embed.add_field(name="Try our premium feature to create playlists", value="Thanatos, killing your boredom", inline=False)
 		await context.send(embed=embed)	
 		best_audio = video.getbestaudio()
 		Server[context.guild.id].mediaPlayer.play(discord.FFmpegPCMAudio(best_audio.url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"), after=lambda e: Server[context.guild.id].nextSongEvent.set())
-		print("serverPlayer waiting lock")
+		print(f"{Server[context.guild.id]} (player): serverPlayer waiting lock")
 		await Server[context.guild.id].nextSongEvent.wait()
-		print("serverPlayer lock acquired")
+
+		if not Server[context.guild.id].gotoFlag:
+			Server[context.guild.id].actualSongIndex = Server[context.guild.id].actualSongIndex + 1
+		Server[context.guild.id].gotoFlag = False
+
+		print(f"{Server[context.guild.id]} (player): serverPlayer lock acquired")
 		Server[context.guild.id].nextSongEvent.clear()
 		await serverPlayer(context)
 
-def youtubePlaylistTreatment(url, context):
+def retrieveSongs(playlist):
 	ytbPlaylist = pafy.get_playlist(url)
-	videosUrl = []
+	videoURL = []
+	for index in range(len(ytbPlaylist['items'])):
+		videoURL.append(f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}")
+		#videoURL = f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}"
+		#await play(context, video)
+	return videoURL
+
+async def youtubePlaylistTreatment(context, url):
+	ytbPlaylist = pafy.get_playlist(url)
 
 	for index in range(len(ytbPlaylist['items'])):
-		video = pafy.new(f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}")
-		Server[context.guild.id].queue.append(video)
-		Server[context.guild.id].copyQueue.append(video)
+		video = f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}"
+		await play(context, video)
 	return
 
 def demultiplexUrlType(url):
@@ -297,7 +327,7 @@ def demultiplexUrlType(url):
 		return 2
 
 @bot.command()
-async def mystuff(context, *actualPage):
+async def profile(context, *actualPage):
 	# retrieveInfoBD = BD()
 	#retrieveInfoBD = [True, 2, "Summer eletrohits", "Brega funk", 54] # premium status/quantidade de playlists criadas/nome das playlists/Duração total
 	retrieveInfoBD = [False, 0, None, 0]
@@ -396,21 +426,28 @@ async def play(context, *inputReceive):
 			video = pafy.new(url)
 			Server[context.guild.id].queue.append(video)
 			Server[context.guild.id].copyQueue.append(video)
-		elif typeUrl == 1: # Broken
-			await context.send("This may take a while. . .")
-			videos = youtubePlaylistTreatment(url, context)
+			Server[context.guild.id].requestBy.append(context.author.mention)
+		elif typeUrl == 1:
+			videoURL = retrieveSongs(url)
+			#await youtubePlaylistTreatment(context, url)
 		elif typeUrl == 2:
 			await context.send(f"Searching for the best result for {url}. . .")
 			query_string = urllib.parse.urlencode({"search_query" : url})
 			html_content = urllib.request.urlopen("http://www.youtube.com/results?" + query_string)
-			search_results = re.findall(r'href=\"\/watch\?v=(.{11})', html_content.read().decode())
-			video = pafy.new("http://www.youtube.com/watch?v=" + search_results[0])
+			search_results = re.search(r'videoId":"(.{11})', html_content.read().decode())
+			search_results = str(search_results[0][-11:])
+			if not search_results:
+				await context.send(f"No results found for ''{url}''")
+				return
+
+			video = pafy.new("http://www.youtube.com/watch?v=" + search_results)
 			Server[context.guild.id].queue.append(video)
 			Server[context.guild.id].copyQueue.append(video)
+			Server[context.guild.id].requestBy.append(context.author.mention)
 
 		voice_client: discord.VoiceClient = discord.utils.get(bot.voice_clients, guild=context.guild)
 
-		await context.message.delete()
+		#await context.message.delete()
 		if not voice_client.is_playing():
 			Server[context.guild.id].mediaPlayer = context.guild.voice_client	
 			await serverPlayer(context)

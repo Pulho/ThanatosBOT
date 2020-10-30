@@ -1,0 +1,8 @@
+discord.py
+discord.py[voice]
+pafy
+websockets
+ffmpeg==1.4
+ffmpeg-python==0.1.17
+pynacl==1.2.1
+youtube_dl==2020.2.16

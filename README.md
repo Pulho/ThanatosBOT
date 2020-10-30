@@ -4,6 +4,8 @@ Bot made in Python language and solely for use in discord. Project made among fr
 ## Special Thanks
 First of all to my friend [João Alberto](https://github.com/joaoalbertos) that presented us with the arts of Thanatos, giving a little more life and cheer to the project.
 Second to my friend [Paulo Vinicius Fernandes](https://github.com/pvfls), who also is a dev on this project for helping me out with database.
+
+
 <img width="472" height="471" align="center" style="float: left; margin: 0 10px 0 0;" alt="defaultThanatos" src="https://github.com/Pulho/ThanatosBOT/blob/master/img/defaultThanatosGIT.png">  
 
 # Functions
@@ -32,3 +34,8 @@ Here we have the design of the queue where we have multiple pages containing a m
 ## DEVS
 * [Paulo Victor de Oliveira Andrade](https://github.com/Pulho)
 * [Paulo Vinicius Fernandes](https://github.com/pvfls)
+
+# Bonus 
+To finish the README of this project, stay with the Christmas version of Thanatos.
+
+<img width="745" height="727" align="bottom" style="float: left; margin: 0 10px 0 0;" alt="santaThanatos" src="https://github.com/Pulho/ThanatosBOT/blob/master/img/santaThanatosGIT.png">  

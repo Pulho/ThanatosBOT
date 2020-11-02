@@ -26,7 +26,7 @@ async def help(context, command=None):
 			return
 	else:
 		generalFunctions = "```asciidoc\nGeneral Functions\ndev       :: See the production team of the Bot\nping      :: Response time of the bot\ngif       :: Send a random gif from Giphy specified by the user\ninvite    :: Link to invite me for your server\n\n\n"
-		voiceFunctions   = "Voice Functions\njoin      :: Join voice channel\nleave     :: Leave actual voice channel\nplay  *   :: Play the url or search on ytb and play\npause     :: Pause the song\nresume    :: Resume a paused song\nstop      :: Stop reproduction song and clear the queue\nskip      :: Skip to the next song\nskip to * :: Skip to the referred index\nqueue     :: Shows songs in queue list\n\n\n"
+		voiceFunctions   = "Voice Functions\njoin      :: Join voice channel\nleave     :: Leave actual voice channel\nplay  *   :: Play the url or search on ytb and play\npause     :: Pause the song\nresume    :: Resume a paused song\nstop      :: Stop reproduction song and clear the queue\nskip      :: Skip to the next song\nskip to * :: Skip to the referred index\nprev      :: Returns to previous song\nqueue     :: Shows songs in queue list\n\n\n"
 		profileFunctions = "Playlist Functions\nprofile   :: Shows your Thanatos profile\ncreatep * :: Create your own playlist named as *\nsetp  *   :: Set the * playlist for you add songs on it\nadd *     :: Add * song on the playlist\ndeletep * :: Delete playlist *\ndeletem * :: Delete a music * from the playlist\nlistp *   :: List all the songs from a playlist *```"
 		valueString = generalFunctions + voiceFunctions + profileFunctions
 		embed.add_field(name="List of all functions from Thanatos", value=valueString, inline=True)

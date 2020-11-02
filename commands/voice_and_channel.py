@@ -305,8 +305,6 @@ def retrieveSongs(playlist):
 	videoURL = []
 	for index in range(len(ytbPlaylist['items'])):
 		videoURL.append(f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}")
-		#videoURL = f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}"
-		#await play(context, video)
 	return videoURL
 
 async def youtubePlaylistTreatment(context, url):
@@ -314,7 +312,10 @@ async def youtubePlaylistTreatment(context, url):
 
 	for index in range(len(ytbPlaylist['items'])):
 		video = f"www.youtube.com/watch?v={ytbPlaylist['items'][index]['pafy'].videoid}"
-		await play(context, video)
+		#await play(context, video)
+		Server[context.guild.id].queue.append(video)
+		Server[context.guild.id].copyQueue.append(video)
+		Server[context.guild.id].requestBy.append(context.author.mention)
 	return
 
 def demultiplexUrlType(url):
@@ -328,8 +329,6 @@ def demultiplexUrlType(url):
 
 @bot.command()
 async def profile(context, *actualPage):
-	# retrieveInfoBD = BD()
-	#retrieveInfoBD = [True, 2, "Summer eletrohits", "Brega funk", 54] # premium status/quantidade de playlists criadas/nome das playlists/Duração total
 	retrieveInfoBD = [False, 0, None, 0]
 
 	userPremium = retrieveInfoBD[0]
@@ -360,8 +359,6 @@ async def profile(context, *actualPage):
 	if quantityPlaylist > 0: 
 		for index in range(quantityPlaylist):
 			playlistName.append(retrieveInfoBD[2 + index])
-
-		print(playlistName)
 
 		if not actualPage:
 			actualPage = 1

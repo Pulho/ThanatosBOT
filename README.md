@@ -13,7 +13,7 @@ Second to my friend [Paulo Vinicius Fernandes](https://github.com/pvfls), who al
 Here we have some of the functions implemented ( Some of them need some fix, like the cat and dog, but one step at time ). You can see the actual design display of the help function and the explication of each command. And also, the playlists functions are not working yet, as i explain in the [Upcoming topic](https://github.com/Pulho/ThanatosBOT#Upcoming).  
 
 
-<img width="560" height="692" align="center" style="float: left; margin: 0 10px 0 0;" alt="helpFunctions" src="https://github.com/Pulho/ThanatosBOT/blob/master/img/helpFunctions.png"> 
+<img width="540" height="516" align="center" style="float: left; margin: 0 10px 0 0;" alt="helpFunctions" src="https://github.com/Pulho/ThanatosBOT/blob/master/img/helpFunctions.png"> 
 
 ## Actual song display
 For each song requested we highlight your name, the user who requested such music, the URL of the song, its duration and your thumb. We also added a slogan that we found funny to the bot "Thanatos, killing your boredom" in reference to its appearance as "reaper".

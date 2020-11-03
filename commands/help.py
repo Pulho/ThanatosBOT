@@ -25,10 +25,10 @@ async def help(context, command=None):
 			await context.send('Command not found in the database')
 			return
 	else:
-		generalFunctions = "```asciidoc\nGeneral Functions\ndev       :: See the production team of the Bot\nping      :: Response time of the bot\ngif       :: Send a random gif from Giphy specified by the user\ninvite    :: Link to invite me for your server\n\n\n"
-		voiceFunctions   = "Voice Functions\njoin      :: Join voice channel\nleave     :: Leave actual voice channel\nplay  *   :: Play the url or search on ytb and play\npause     :: Pause the song\nresume    :: Resume a paused song\nstop      :: Stop reproduction song and clear the queue\nskip      :: Skip to the next song\nskip to * :: Skip to the referred index\nprev      :: Returns to previous song\nqueue     :: Shows songs in queue list\n\n\n"
-		profileFunctions = "Playlist Functions\nprofile   :: Shows your Thanatos profile\ncreatep * :: Create your own playlist named as *\nsetp  *   :: Set the * playlist for you add songs on it\nadd *     :: Add * song on the playlist\ndeletep * :: Delete playlist *\ndeletem * :: Delete a music * from the playlist\nlistp *   :: List all the songs from a playlist *```"
-		valueString = generalFunctions + voiceFunctions + profileFunctions
+		generalFunctions = "```asciidoc\nGeneral Functions\ndev       :: See the production team of the Bot\nping      :: Response time of the bot\ngif       :: Send a random gif from Giphy specified\ninvite    :: Link to invite me for your server\nw2g       :: Creates a temporary room in Watch2gether\n\n"
+		voiceFunctions   = "Voice Functions\njoin      :: Join voice channel\nleave     :: Leave actual voice channel\nplay  *   :: Play the url or search on ytb and play\npause     :: Pause the song\nresume    :: Resume a paused song\nstop      :: Stop reproduction song and clear the queue\nskip      :: Skip to the next song\nskip to * :: Skip to the referred index\nprev      :: Returns to previous song\nqueue     :: Shows songs in queue list```\n\n\n"
+		#profileFunctions = "Playlist Functions\nprofile   :: Shows your Thanatos profile\ncreatep * :: Create your own playlist named as *\nsetp  *   :: Set the * playlist for you add songs on it\nadd *     :: Add * song on the playlist\ndeletep * :: Delete playlist *\ndeletem * :: Delete a music * from the playlist\nlistp *   :: List all the songs from a playlist *```"
+		valueString = generalFunctions + voiceFunctions #+ profileFunctions
 		embed.add_field(name="List of all functions from Thanatos", value=valueString, inline=True)
 		embed.set_footer(text = "Thanatos, killing your boredom", icon_url = "https://cdn.discordapp.com/avatars/408656896497549312/3bcbce16bb2ea16126e3a1d38a7b09bd.png?size=512")
 		await context.send(embed=embed)
